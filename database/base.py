@@ -17,7 +17,40 @@ class BotBase:
                            'user_id INTEGER'
                            ');')
 
+            # Таблица истории
+            cursor.execute('CREATE TABLE IF NOT EXISTS History (ten_id INTEGER,'
+                           'reporting_date TEXT,'
+                           'cold TEXT,'
+                           'hot TEXT,'
+                           'electricity TEXT,'
+                           'heating TEXT,'
+                           'payment_slip TEXT,'
+                           'check_id TEXT'
+                           ');')
+
             connection.commit()
+
+    # ========== Операции с историей о квартплате ==========
+
+    @staticmethod
+    async def add_report(ten_id, data, cold, hot, electricity, heating, payment_slip, check_id):
+        """Вставляем сразу все столбцы"""
+        with sqlite3.connect('tenant_base.db') as connection:
+            cursor = connection.cursor()
+            cursor.execute(f'INSERT INTO History (ten_id, reporting_date, cold, hot,'
+                           f'electricity, heating, payment_slip, check_id) '
+                           f'VALUES ({ten_id}, "{data}", "{cold}", "{hot}", "{electricity}", "{heating}", "{payment_slip}", "{check_id}")')
+            connection.commit()
+
+    @staticmethod
+    async def get_tenant_history(ten_id):
+        with sqlite3.connect('tenant_base.db') as connection:
+            cursor = connection.cursor()
+            tenant_history = cursor.execute(f'SELECT * FROM History WHERE ten_id = {ten_id};').fetchall()
+            return tenant_history
+
+
+    # ========== Операции с квартирантами ==========
 
     @staticmethod
     async def add_tenant(address, name, user_id):
@@ -45,3 +78,11 @@ class BotBase:
 
             # Так как из базы возвращается кортеж, то перед возвратом преобразуем в список
             return [ten_id[0] for ten_id in tenants_id]
+
+    @staticmethod
+    async def delete_tenant_from_base(ten_id):
+        """Удаляем квартиранта из базы"""
+        with sqlite3.connect('tenant_base.db') as connection:
+            cursor = connection.cursor()
+            cursor.execute(f'DELETE FROM Tenants WHERE user_id = {ten_id}')
+            connection.commit()

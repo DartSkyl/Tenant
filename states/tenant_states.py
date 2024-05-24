@@ -11,3 +11,5 @@ class Tenant(StatesGroup):
     edit_hot_water = State()
     edit_electricity = State()
     edit_heating = State()
+
+    send_check = State()

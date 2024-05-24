@@ -1,8 +1,10 @@
+import datetime
 from loader import bot, tenant_list, bot_base
 from utils.admin_router import admin_router
 from utils.tenant_model import Tenant
 from utils.sendler import SendlerInterface
-from keyboards import main_menu, edit_tenant_data, settings
+from keyboards import (main_menu, edit_tenant_data, settings, send_payment_slip,
+                       send_ps, send_check, viewing_tenant, ten_rem_conf, view_history_checks)
 from states import AdminStates
 
 from aiogram.types import Message, FSInputFile, CallbackQuery
@@ -18,10 +20,199 @@ async def start_function(msg: Message, state: FSMContext):
     await msg.answer(text='Главное меню:', reply_markup=main_menu)
 
 
-@admin_router.message(F.text == 'Настройки')
+@admin_router.callback_query(F.data.startswith('rd_come_'))
+async def catch_readings(callback: CallbackQuery, state: FSMContext):
+    """Подтверждаем получение показаний"""
+    await callback.answer()
+    ten_id = int(callback.data.replace('rd_come_', ''))
+    await bot.send_message(chat_id=ten_id, text='<b>Показания получены, ожидайте платежку!</b>')
+    ten_info = ''
+    for ten in tenant_list:
+        if ten.get_tenant_id() == ten_id:
+            ten_info += ten.get_info_string()
+    msg_text = f'Квартирант {ten_info} ожидает платежку\n\n<b>{datetime.datetime.now().strftime("%H:%M %d.%m.%Y")}</b>'
+
+    await callback.message.answer(text=msg_text, reply_markup=send_payment_slip(ten_id))
+
+
+@admin_router.callback_query(F.data.startswith('send_ps_'))
+async def send_payment(callback: CallbackQuery, state: FSMContext):
+    """Предлагаем скинуть документ с платежкой и сохраняем ID адресата"""
+    await callback.answer()
+    await state.set_data({'ten_id': int(callback.data.replace('send_ps_', ''))})
+    await state.set_state(AdminStates.send_payment_slip)
+    await callback.message.answer('Скиньте платежку')
+
+
+@admin_router.message(AdminStates.send_payment_slip)
+async def catch_payment_slip(msg: Message, state: FSMContext):
+    """Ловим платежку. Может быть фото либо документ"""
+    ten_id = (await state.get_data())['ten_id']
+    if msg.photo:
+        await state.update_data({'payment_slip': (msg.photo[-1].file_id, 'photo')})
+        await msg.answer(text='Отправьте платежку или скиньте заново', reply_markup=send_ps(ten_id))
+    elif msg.document:
+        await state.update_data({'payment_slip': (msg.document.file_id, 'document')})
+        await msg.answer(text='Отправьте платежку или скиньте заново', reply_markup=send_ps(ten_id))
+
+
+@admin_router.callback_query(AdminStates.send_payment_slip, F.data.startswith('sps_'))
+async def payment_slip_go_to_tenant(callback: CallbackQuery, state: FSMContext):
+    """Отправляем платежку адресату"""
+    await callback.answer()
+    payment_slip_info = await state.get_data()
+
+    ten_info = ''
+
+    for ten in tenant_list:
+        if ten.get_tenant_id() == payment_slip_info['ten_id']:
+            ten_info += ten.get_info_string()
+
+            # И сразу заносим платежку в словарь для истории
+
+            ten.readings_dict['payment_slip'] = payment_slip_info['payment_slip'][0] + '^^^^^' + payment_slip_info['payment_slip'][1]
+            break
+    msg_text = f'Платежка для {ten_info} отправлена'
+
+    if payment_slip_info['payment_slip'][1] == 'photo':
+        await bot.send_photo(
+            chat_id=payment_slip_info['ten_id'],
+            photo=payment_slip_info['payment_slip'][0],
+            caption=f'<b>{datetime.datetime.now().strftime("%H:%M %d.%m.%Y")}</b>',
+            reply_markup=send_check
+        )
+        await state.clear()
+
+    elif payment_slip_info['payment_slip'][1] == 'document':
+        await bot.send_document(
+            chat_id=payment_slip_info['ten_id'],
+            document=payment_slip_info['payment_slip'][0],
+            caption=f'<b>{datetime.datetime.now().strftime("%H:%M %d.%m.%Y")}</b>',
+            reply_markup=send_check
+        )
+        await state.clear()
+
+    await callback.message.answer(msg_text)
+
+
+@admin_router.callback_query(F.data.startswith('ch_conf_'))
+async def check_confirming(callback: CallbackQuery, state: FSMContext):
+    """Ловим чек и подтверждаем получение"""
+    await callback.answer()
+    ten_id = int(callback.data.replace('ch_conf_', ''))
+    ten_info = ''
+
+    for ten in tenant_list:
+        if ten.get_tenant_id() == ten_id:
+            ten_info += ten.get_info_string()
+            await bot_base.add_report(
+                ten_id=ten.get_tenant_id(),
+                data=ten.readings_dict['reporting_date'],
+                cold=ten.readings_dict['cold'],
+                hot=ten.readings_dict['hot'],
+                electricity=ten.readings_dict['electricity'],
+                heating=ten.readings_dict['heating'],
+                payment_slip=ten.readings_dict['payment_slip'],
+                check_id=ten.readings_dict['check']
+            )
+            break
+    await bot.send_message(chat_id=ten_id, text='Получение чека подтверждено')
+
+    msg_text = (f'Квартирант {ten_info} оплатил коммуналку!\n\n'
+                f'<b>{datetime.datetime.now().strftime("%H:%M %d.%m.%Y")}</b>')
+
+    await callback.message.answer(msg_text)
+
+
+# ========== Просмотр истории квартирантов ==========
+
+@admin_router.callback_query(F.data.startswith('hist_'))
+async def view_tenant_history(callback: CallbackQuery, state: FSMContext):
+    """Показываем историю конкретного квартиранта"""
+    await callback.answer()
+    await state.set_data({'empty': None})  # Заглушка для того, что бы просто задать data и использовать ниже
+    ten_history = await bot_base.get_tenant_history(callback.data.replace('hist_', ''))
+    for elem in ten_history:
+        msg_text = (f'<b>📆 Отчетный период:</b> {elem[1]}\n'
+                    f'<b>❄️ Холодная вода:</b> {elem[2]}\n'
+                    f'<b>🔥 Горячая вода:</b> {elem[3]}\n'
+                    f'<b>⚡ Электричество:</b> {elem[4]}\n'
+                    f'<b>🌡️ Отопление:</b> {elem[5]}')
+
+        # Ключ это ID квартиранта и дата отчетного периода. Значение это file_id платежки и чека
+        # Да извращение, но лучше я ничего не придумал!
+        await state.update_data({f'{elem[0]}_{elem[1]}': (f'{elem[6]}', f'{elem[7]}')})
+        await callback.message.answer(text=msg_text, reply_markup=view_history_checks(f'{elem[0]}_{elem[1]}'))
+
+
+@admin_router.callback_query(F.data.startswith('p_'))
+async def view_payment_slip(callback: CallbackQuery, state: FSMContext):
+    """Отправляем в чат платежку"""
+    await callback.answer()
+    pay_slip = (await state.get_data())[callback.data.replace('p_', '')][0].split('^^^^^')
+    if pay_slip[1] == 'document':
+        await callback.message.answer_document(document=pay_slip[0])
+    else:
+        await callback.message.answer_photo(photo=pay_slip[0])
+
+
+@admin_router.callback_query(F.data.startswith('ch_'))
+async def view_payment_check(callback: CallbackQuery, state: FSMContext):
+    """Отправляем в чат чек оплаты коммуналки"""
+    await callback.answer()
+    check = (await state.get_data())[callback.data.replace('ch_', '')][1].split('^^^^^')
+    if check[1] == 'document':
+        await callback.message.answer_document(document=check[0])
+    else:
+        await callback.message.answer_photo(photo=check[0])
+
+
+# ========== Просмотр/удаление квартирантов ==========
+
+@admin_router.message(F.text == '📋 Текущие квартиранты')
+async def view_tenants(msg: Message):
+    """Просмотр всех квартирантов"""
+    for ten in tenant_list:
+        await msg.answer(text=ten.view_tenant(), reply_markup=viewing_tenant(ten.get_tenant_id()))
+
+
+@admin_router.callback_query(F.data.startswith('del_'))
+async def remove_tenant(callback: CallbackQuery, state: FSMContext):
+    """Удаляем квартиранта с подтверждением"""
+    await callback.answer()
+    if callback.data == 'del_yes':
+        rem_ten_id = (await state.get_data())['del_ten_id']
+        for ten in tenant_list:
+            if ten.get_tenant_id() == rem_ten_id:
+                await bot_base.delete_tenant_from_base(rem_ten_id)
+                tenant_list.remove(ten)
+                break
+
+        await callback.message.answer('Удаление завершено!')
+
+    elif callback.data == 'del_no':
+        for ten in tenant_list:
+            await callback.message.answer(text=ten.view_tenant(), reply_markup=viewing_tenant(ten.get_tenant_id()))
+        await state.clear()
+    else:
+        ten_id = int(callback.data.replace('del_', ''))
+        ten_info = ''
+
+        for ten in tenant_list:
+            if ten.get_tenant_id() == ten_id:
+                ten_info += ten.get_info_string()
+                break
+        await state.set_data({'del_ten_id': ten_id})
+        await callback.message.answer(text=f'Вы уверены, что хотите удалить квартиранта {ten_info}?',
+                                      reply_markup=ten_rem_conf)
+
+
+# ========== Настройки бота ==========
+
+
+@admin_router.message(F.text == '⚙️ Настройки')
 async def open_settings_menu(msg: Message):
     """Открываем меню настройки отправителя напоминаний"""
-    # print(type(sendler_inst))
     await msg.answer(text=await SendlerInterface.get_settings_info(), reply_markup=settings)
 
 
@@ -73,7 +264,7 @@ async def set_new_interval(msg: Message):
 async def tenant_registration_start(callback: CallbackQuery, state: FSMContext):
     """Запуск регистрации квартиранта"""
     await callback.answer()
-    await state.set_data({'user_id': callback.data.replace('reg_', '')})
+    await state.set_data({'user_id': int(callback.data.replace('reg_', ''))})
     await callback.message.answer(text='Введите адрес квартиранта:')
     await state.set_state(AdminStates.address)
 
@@ -120,7 +311,7 @@ async def edit_tenant_data_func(callback: CallbackQuery, state: FSMContext):
         tenant_data = await state.get_data()
 
         await bot.send_message(chat_id=tenant_data['user_id'],
-                               text='Добрый день! Вы были добавлены в бота-квартиранта!')
+                               text='Вы были добавлены в бота-квартиранта!')
 
         tenant = Tenant(
             address=tenant_data['address'],
@@ -137,6 +328,8 @@ async def edit_tenant_data_func(callback: CallbackQuery, state: FSMContext):
             name=tenant_data['name'],
             user_id=tenant_data['user_id']
         )
+
+        await callback.message.answer('Квартирант зарегистрирован!')
 
 
 @admin_router.message(AdminStates.edit_address)

@@ -1,8 +1,10 @@
+import datetime
 from loader import bot, tenant_list, bot_base, dp
 from config.configurations import ADMIN_ID
 from utils.admin_router import admin_router
 from utils.tenant_model import Tenant
-from keyboards import registration_application, readings_editor, confirm_sending, readings_come
+from keyboards import (registration_application, readings_editor,
+                       confirm_sending, readings_come, check_ready, confirm_check)
 from states import Tenant
 
 from aiogram.types import Message, FSInputFile, CallbackQuery
@@ -52,11 +54,13 @@ async def view_readings(msg: Message, state: FSMContext):
     """Вывод введенных данных"""
     readings_data = await state.get_data()
     msg_text = (f'<b><i>Показания счетчиков:</i></b>\n\n'
-                f'<b>Холодная вода:</b> {readings_data["cold"]}\n'
-                f'<b>Горячая вода:</b> {readings_data["hot"]}\n'
-                f'<b>Электричество:</b>{readings_data["electricity"]}\n'
-                f'<b>Отопление:</b> {readings_data["heating"]}')
+                f'<b>❄️ Холодная вода:</b> {readings_data["cold"]}\n'
+                f'<b>🔥 Горячая вода:</b> {readings_data["hot"]}\n'
+                f'<b>⚡ Электричество:</b>{readings_data["electricity"]}\n'
+                f'<b>🌡️ Отопление:</b> {readings_data["heating"]}')
 
+    await msg.answer('<b>Проверьте правильность введенных данных перед отправкой!\n'
+                     'Так же укажите отопление, если необходимо</b>❗')
     await msg.answer(text=msg_text, reply_markup=readings_editor)
     await state.set_state(Tenant.view_readings)
 
@@ -66,7 +70,7 @@ async def get_electricity(msg: Message, state: FSMContext):
     """Ловим электричество и выводим введенную информацию с возможностью изменить"""
 
     # Так же вставим значения для отопления, которое можно будет изменить перед отправкой если нужно
-    await state.update_data({'electricity': msg.text, 'heating': 0})
+    await state.update_data({'electricity': msg.text, 'heating': '0'})
     await view_readings(msg=msg, state=state)
 
 
@@ -126,15 +130,90 @@ async def send_readings_func(callback: CallbackQuery, state: FSMContext):
             if ten.get_tenant_id() == int(readings['tenant_id']):
                 tenant_info += ten.get_info_string()
                 ten.readings_sent()  # Заодно укажем, что квартирант отправил показания
-                print(ten)
+
+                # А так же сохраним данные в словарь, что бы потом сохранить в историю
+
+                ten.readings_dict['cold'] = readings["cold"]
+                ten.readings_dict['hot'] = readings["hot"]
+                ten.readings_dict['electricity'] = readings["electricity"]
+                ten.readings_dict['heating'] = readings["heating"]
+                break
+
         msg_text = (f'<i>Показания счетчиков {tenant_info}:</i>\n\n'
-                    f'<b>Холодная вода:</b> {readings["cold"]}\n'
-                    f'<b>Горячая вода:</b> {readings["hot"]}\n'
-                    f'<b>Электричество:</b>{readings["electricity"]}\n'
-                    f'<b>Отопление:</b> {readings["heating"]}')
+                    f'<b>❄️ Холодная вода:</b> {readings["cold"]}\n'
+                    f'<b>🔥 Горячая вода:</b> {readings["hot"]}\n'
+                    f'<b>⚡ Электричество:</b>{readings["electricity"]}\n'
+                    f'<b>🌡️ Отопление:</b> {readings["heating"]}\n\n'
+                    f'<b>{datetime.datetime.now().strftime("%H:%M %d.%m.%Y")}</b>')
 
         await bot.send_message(chat_id=ADMIN_ID, text=msg_text, reply_markup=readings_come(readings['tenant_id']))
         await callback.message.answer('Показания отправлены, ожидайте подтверждение')
+        await state.clear()
 
     else:
         await view_readings(msg=callback.message, state=state)
+
+
+@dp.callback_query(F.data == 'check_send')
+async def send_check_start(callback: CallbackQuery, state: FSMContext):
+    """Начинаем отправку чека"""
+    await callback.answer()
+    await state.set_state(Tenant.send_check)
+    # await state.set_data({'ten_check_id': callback.from_user.id})
+    await callback.message.answer('Скиньте чек в виде фото или документа:')
+
+
+@dp.message(Tenant.send_check)
+async def catch_ten_check(msg: Message, state: FSMContext):
+    """Ловим чек, либо фото, либо документ. Отправляем или предлагаем скинуть заново"""
+    if msg.photo:
+        await state.update_data({'check': (msg.photo[-1].file_id, 'photo')})
+        await msg.answer(text='Отправьте чек или скиньте заново', reply_markup=check_ready)
+    elif msg.document:
+        await state.update_data({'check': (msg.document.file_id, 'document')})
+        await msg.answer(text='Отправьте чек или скиньте заново', reply_markup=check_ready)
+
+
+@dp.callback_query(F.data == 'check_ready')
+async def send_check_to_admin(callback: CallbackQuery, state: FSMContext):
+    """Отправляем чек админу в соответствии с форматом"""
+    await callback.answer()
+    payment_slip_info = await state.get_data()
+
+    ten_info = ''
+
+    for ten in tenant_list:
+        if ten.get_tenant_id() == callback.from_user.id:
+            ten_info += ten.get_info_string()
+
+            # И сразу заносим чек в словарь для истории
+
+            ten.readings_dict['check'] = payment_slip_info['check'][0] + '^^^^^' + \
+                                                payment_slip_info['check'][1]
+
+            break
+
+    msg_text = f'Чек от {ten_info}\n<b>{datetime.datetime.now().strftime("%H:%M %d.%m.%Y")}</b>'
+
+    if payment_slip_info['check'][1] == 'photo':
+        await bot.send_photo(
+            chat_id=ADMIN_ID,
+            photo=payment_slip_info['check'][0],
+            caption=msg_text,
+            reply_markup=confirm_check(callback.from_user.id)
+        )
+        await state.clear()
+
+    elif payment_slip_info['check'][1] == 'document':
+        await bot.send_document(
+            chat_id=ADMIN_ID,
+            document=payment_slip_info['check'][0],
+            caption=msg_text,
+            reply_markup=confirm_check(callback.from_user.id)
+        )
+        await state.clear()
+
+    await callback.message.answer('Чек отправлен, ожидайте подтверждения')
+
+
+

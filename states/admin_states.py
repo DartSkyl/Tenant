@@ -17,3 +17,7 @@ class AdminStates(StatesGroup):
     set_data = State()
     set_time = State()
     set_interval = State()
+
+    # Отправка платежки
+
+    send_payment_slip = State()
