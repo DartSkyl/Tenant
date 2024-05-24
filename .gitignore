@@ -1,0 +1,4 @@
+/.env
+/for_test.py
+/*.log
+/*.db
