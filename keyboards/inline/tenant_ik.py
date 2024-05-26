@@ -15,7 +15,8 @@ need_heating = InlineKeyboardMarkup(inline_keyboard=[
 readings_editor = InlineKeyboardMarkup(inline_keyboard=[
     [InlineKeyboardButton(text='❄️ Изменить холодную воду', callback_data='read_edit_cold')],
     [InlineKeyboardButton(text='🔥 Изменить горячую воду', callback_data='read_edit_hot')],
-    [InlineKeyboardButton(text='⚡ Изменить электричество', callback_data='read_edit_elect')],
+    [InlineKeyboardButton(text='⚡ Изменить электричество день', callback_data='read_edit_elect_day')],
+    [InlineKeyboardButton(text='⚡ Изменить электричество ночь', callback_data='read_edit_elect_night')],
     [InlineKeyboardButton(text='🌡️ Изменить отопление', callback_data='read_edit_heating')],
     [InlineKeyboardButton(text='✅ Отправить показания', callback_data='send_readings')]
 ])

@@ -154,7 +154,8 @@ async def check_confirming(callback: CallbackQuery, state: FSMContext):
                 data=ten.readings_dict['reporting_date'],
                 cold=ten.readings_dict['cold'],
                 hot=ten.readings_dict['hot'],
-                electricity=ten.readings_dict['electricity'],
+                electricity_day=ten.readings_dict['electricity_day'],
+                electricity_night=ten.readings_dict['electricity_night'],
                 heating=ten.readings_dict['heating'],
                 payment_slip=ten.readings_dict['payment_slip'],
                 check_id=ten.readings_dict['check']
@@ -182,12 +183,13 @@ async def view_tenant_history(callback: CallbackQuery, state: FSMContext):
         msg_text = (f'<b>📆 Отчетный период:</b> {elem[1]}\n'
                     f'<b>❄️ Холодная вода:</b> {elem[2]}\n'
                     f'<b>🔥 Горячая вода:</b> {elem[3]}\n'
-                    f'<b>⚡ Электричество:</b> {elem[4]}\n'
-                    f'<b>🌡️ Отопление:</b> {elem[5]}')
+                    f'<b>⚡ Электричество день:</b> {elem[4]}\n'
+                    f'<b>⚡ Электричество ночь:</b> {elem[5]}\n'
+                    f'<b>🌡️ Отопление:</b> {elem[6]}')
 
         # Ключ это ID квартиранта и дата отчетного периода. Значение это file_id платежки и чека
         # Да извращение, но лучше я ничего не придумал!
-        await state.update_data({f'{elem[0]}_{elem[1]}': (f'{elem[6]}', f'{elem[7]}')})
+        await state.update_data({f'{elem[0]}_{elem[1]}': (f'{elem[7]}', f'{elem[8]}')})
         await callback.message.answer(text=msg_text, reply_markup=view_history_checks(f'{elem[0]}_{elem[1]}'))
 
 

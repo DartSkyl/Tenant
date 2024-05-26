@@ -17,7 +17,8 @@ class Tenant:
             'reporting_date': None,
             'cold': None,
             'hot': None,
-            'electricity': None,
+            'electricity_day': None,
+            'electricity_night': None,
             'heating': None,
             'payment_slip': None,
             'check': None

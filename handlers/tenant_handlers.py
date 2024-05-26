@@ -19,7 +19,8 @@ async def view_readings(msg: Message, state: FSMContext):
     msg_text = (f'<b><i>Показания счетчиков:</i></b>\n\n'
                 f'<b>❄️ Холодная вода:</b> {readings_data["cold"]}\n'
                 f'<b>🔥 Горячая вода:</b> {readings_data["hot"]}\n'
-                f'<b>⚡ Электричество:</b>{readings_data["electricity"]}\n'
+                f'<b>⚡ Электричество день:</b>{readings_data["electricity_day"]}\n'
+                f'<b>⚡ Электричество ночь:</b>{readings_data["electricity_night"]}\n'
                 f'<b>🌡️ Отопление:</b> {readings_data["heating"]}')
 
     await msg.answer('<b>Проверьте правильность введенных данных перед отправкой</b>❗')
@@ -48,15 +49,24 @@ async def start_readings_send(callback: CallbackQuery, state: FSMContext):
     await state.set_data({'tenant_id': callback.data.replace('readings_', '')})
     await callback.answer()
     await callback.message.answer('Введите показания в следующем порядке:\n'
-                                  '<b>холодная вода горячая вода электричество</b>\n')
+                                  '<b>холодная вода</b> <i>горячая вода</i> <b>электричество день</b> '
+                                  '<i>электричество ночь</i>\n')
     await state.set_state(Tenant.set_readings)
 
 
-@tenant_router.message(Tenant.set_readings, F.text.regexp(r'\d{1,}\s\d{1,}\s\d{1,}$'))
+@tenant_router.message(Tenant.set_readings, F.text.regexp(r'\d{1,}\s\d{1,}\s\d{1,}\s\d{1,}$'))
 async def catch_readings(msg: Message, state: FSMContext):
     """Ловим все показания разом"""
     readings = msg.text.split()
-    await state.update_data({'cold': readings[0], 'hot': readings[1], 'electricity': readings[2]})
+
+    await state.update_data({
+
+        'cold': readings[0],
+        'hot': readings[1],
+        'electricity_day': readings[2],
+        'electricity_night': readings[3]
+
+    })
     await msg.answer(text='Нужно указать отопление?', reply_markup=need_heating)
 
 
@@ -95,7 +105,8 @@ async def edit_readings(callback: CallbackQuery, state: FSMContext):
     readings_editor_dict = {
         'read_edit_cold': (Tenant.edit_cold_water, 'Введите показания холодной воды:'),
         'read_edit_hot': (Tenant.edit_hot_water, 'Введите показания горячей воды:'),
-        'read_edit_elect': (Tenant.edit_electricity, 'Введите показания электричества:'),
+        'read_edit_elect_day': (Tenant.edit_electricity_day, 'Введите показания электричества день:'),
+        'read_edit_elect_night': (Tenant.edit_electricity_night, 'Введите показания электричества ночь:'),
         'read_edit_heating': (Tenant.edit_heating, 'Введите показания отопления:')
     }
 
@@ -118,10 +129,17 @@ async def edit_hot_water(msg: Message, state: FSMContext):
     await view_readings(msg=msg, state=state)
 
 
-@tenant_router.message(Tenant.edit_electricity)
-async def edit_electricity(msg: Message, state: FSMContext):
-    """Изменяем показания электричества"""
-    await state.update_data({'electricity': msg.text})
+@tenant_router.message(Tenant.edit_electricity_day)
+async def edit_electricity_day(msg: Message, state: FSMContext):
+    """Изменяем показания электричества день"""
+    await state.update_data({'electricity_day': msg.text})
+    await view_readings(msg=msg, state=state)
+
+
+@tenant_router.message(Tenant.edit_electricity_night)
+async def edit_electricity_night(msg: Message, state: FSMContext):
+    """Изменяем показания электричества день"""
+    await state.update_data({'electricity_night': msg.text})
     await view_readings(msg=msg, state=state)
 
 
@@ -150,14 +168,16 @@ async def send_readings_func(callback: CallbackQuery, state: FSMContext):
 
                 ten.readings_dict['cold'] = readings["cold"]
                 ten.readings_dict['hot'] = readings["hot"]
-                ten.readings_dict['electricity'] = readings["electricity"]
+                ten.readings_dict['electricity_day'] = readings["electricity_day"]
+                ten.readings_dict['electricity_night'] = readings["electricity_night"]
                 ten.readings_dict['heating'] = readings["heating"]
                 break
 
         msg_text = (f'<i>Показания счетчиков {tenant_info}:</i>\n\n'
                     f'<b>❄️ Холодная вода:</b> {readings["cold"]}\n'
                     f'<b>🔥 Горячая вода:</b> {readings["hot"]}\n'
-                    f'<b>⚡ Электричество:</b>{readings["electricity"]}\n'
+                    f'<b>⚡ Электричество день:</b>{readings["electricity_day"]}\n'
+                    f'<b>⚡ Электричество ночь:</b>{readings["electricity_night"]}\n'
                     f'<b>🌡️ Отопление:</b> {readings["heating"]}\n\n'
                     f'<b>{datetime.datetime.now().strftime("%H:%M %d.%m.%Y")}</b>')
 

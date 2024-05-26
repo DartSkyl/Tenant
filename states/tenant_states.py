@@ -9,7 +9,8 @@ class Tenant(StatesGroup):
 
     edit_cold_water = State()
     edit_hot_water = State()
-    edit_electricity = State()
+    edit_electricity_day = State()
+    edit_electricity_night = State()
     edit_heating = State()
 
     send_first_check = State()

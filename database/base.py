@@ -22,7 +22,8 @@ class BotBase:
                            'reporting_date TEXT,'
                            'cold TEXT,'
                            'hot TEXT,'
-                           'electricity TEXT,'
+                           'electricity_day TEXT,'
+                           'electricity_night TEXT,'
                            'heating TEXT,'
                            'payment_slip TEXT,'
                            'check_id TEXT'
@@ -33,13 +34,13 @@ class BotBase:
     # ========== Операции с историей о квартплате ==========
 
     @staticmethod
-    async def add_report(ten_id, data, cold, hot, electricity, heating, payment_slip, check_id):
+    async def add_report(ten_id, data, cold, hot, electricity_day, electricity_night, heating, payment_slip, check_id):
         """Вставляем сразу все столбцы"""
         with sqlite3.connect('tenant_base.db') as connection:
             cursor = connection.cursor()
             cursor.execute(f'INSERT INTO History (ten_id, reporting_date, cold, hot,'
-                           f'electricity, heating, payment_slip, check_id) '
-                           f'VALUES ({ten_id}, "{data}", "{cold}", "{hot}", "{electricity}", "{heating}", "{payment_slip}", "{check_id}")')
+                           f'electricity_day, electricity_night, heating, payment_slip, check_id) '
+                           f'VALUES ({ten_id}, "{data}", "{cold}", "{hot}", "{electricity_day}", "{electricity_night}", "{heating}", "{payment_slip}", "{check_id}")')
             connection.commit()
 
     @staticmethod
