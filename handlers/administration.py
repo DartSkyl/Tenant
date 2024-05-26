@@ -1,4 +1,5 @@
 import datetime
+from sqlite3 import IntegrityError
 from loader import bot, tenant_list, bot_base
 from utils.admin_router import admin_router
 from utils.tenant_model import Tenant
@@ -6,6 +7,7 @@ from utils.sendler import SendlerInterface
 from keyboards import (main_menu, edit_tenant_data, settings, send_payment_slip,
                        send_ps, send_check, viewing_tenant, ten_rem_conf, view_history_checks)
 from states import AdminStates
+from config.configurations import ADMIN_ID
 
 from aiogram.types import Message, FSInputFile, CallbackQuery
 from aiogram import F
@@ -30,9 +32,12 @@ async def catch_readings(callback: CallbackQuery, state: FSMContext):
     for ten in tenant_list:
         if ten.get_tenant_id() == ten_id:
             ten_info += ten.get_info_string()
+            break
     msg_text = f'Квартирант {ten_info} ожидает платежку\n\n<b>{datetime.datetime.now().strftime("%H:%M %d.%m.%Y")}</b>'
 
-    await callback.message.answer(text=msg_text, reply_markup=send_payment_slip(ten_id))
+    for admin in ADMIN_ID:
+        await bot.send_message(chat_id=admin, text=msg_text, reply_markup=send_payment_slip(ten_id))
+    # await callback.message.answer(text=msg_text, reply_markup=send_payment_slip(ten_id))
 
 
 @admin_router.callback_query(F.data.startswith('send_ps_'))
@@ -92,7 +97,9 @@ async def payment_slip_go_to_tenant(callback: CallbackQuery, state: FSMContext):
         )
         await state.clear()
 
-    await callback.message.answer(msg_text)
+    for admin in ADMIN_ID:
+        await bot.send_message(chat_id=admin, text=msg_text)
+    # await callback.message.answer(msg_text)
 
 
 @admin_router.callback_query(F.data.startswith('ch_conf_'))
@@ -121,7 +128,9 @@ async def check_confirming(callback: CallbackQuery, state: FSMContext):
     msg_text = (f'Квартирант {ten_info} оплатил коммуналку!\n\n'
                 f'<b>{datetime.datetime.now().strftime("%H:%M %d.%m.%Y")}</b>')
 
-    await callback.message.answer(msg_text)
+    for admin in ADMIN_ID:
+        await bot.send_message(chat_id=admin, text=msg_text)
+    # await callback.message.answer(msg_text)
 
 
 # ========== Просмотр истории квартирантов ==========
@@ -310,26 +319,34 @@ async def edit_tenant_data_func(callback: CallbackQuery, state: FSMContext):
     else:
         tenant_data = await state.get_data()
 
-        await bot.send_message(chat_id=tenant_data['user_id'],
-                               text='Вы были добавлены в бота-квартиранта!')
+        try:
+            # сохраняем в базу
+            await bot_base.add_tenant(
+                address=tenant_data['address'],
+                name=tenant_data['name'],
+                user_id=tenant_data['user_id']
+            )
 
-        tenant = Tenant(
-            address=tenant_data['address'],
-            name=tenant_data['name'],
-            user_id=tenant_data['user_id']
-        )
+            tenant = Tenant(
+                address=tenant_data['address'],
+                name=tenant_data['name'],
+                user_id=tenant_data['user_id']
+            )
 
-        # Добавляем в общий список
-        tenant_list.append(tenant)
+            # Добавляем в общий список
+            tenant_list.append(tenant)
 
-        # И сохраняем в базу
-        await bot_base.add_tenant(
-            address=tenant_data['address'],
-            name=tenant_data['name'],
-            user_id=tenant_data['user_id']
-        )
+            await bot.send_message(chat_id=tenant_data['user_id'],
+                                   text='Вы были добавлены в бота-квартиранта!')
+            await callback.message.answer('Квартирант зарегистрирован!')
 
-        await callback.message.answer('Квартирант зарегистрирован!')
+            for admin in ADMIN_ID:
+                if admin != callback.from_user.id:
+                    await bot.send_message(chat_id=admin, text=f'Зарегистрирован квартирант <b>{tenant_data["name"]}</b>'
+                                           f' по адресу <b>{tenant_data["address"]}</b>')
+        except IntegrityError:
+            await callback.message.answer('Квартирант уже зарегистрирован!')
+        await start_function(msg=callback.message, state=state)
 
 
 @admin_router.message(AdminStates.edit_address)

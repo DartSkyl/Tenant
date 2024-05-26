@@ -1,31 +1,34 @@
 import datetime
-from loader import bot, tenant_list, bot_base, dp
+from loader import bot, tenant_list, bot_base
 from config.configurations import ADMIN_ID
-from utils.admin_router import admin_router
+from utils.tenant_router import tenant_router
 from utils.tenant_model import Tenant
 from keyboards import (registration_application, readings_editor,
                        confirm_sending, readings_come, check_ready, confirm_check)
 from states import Tenant
 
-from aiogram.types import Message, FSInputFile, CallbackQuery
+from aiogram.types import Message, CallbackQuery
 from aiogram import F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 
 
-@dp.message(Command('start'), F.from_user.id != ADMIN_ID)
+@tenant_router.message(Command('start'))
 async def start_for_tenants(msg: Message):
     """При первом взаимодействие администратору отправляется заявка на регистрацию"""
     id_list = await bot_base.get_tenants_id()
     if msg.from_user.id not in id_list:
         msg_text = f'Заявка на регистрацию от <b>{msg.from_user.full_name}</b>'
         await msg.answer('Заявка на регистрацию отправлена. Ожидайте.')
-        await bot.send_message(chat_id=ADMIN_ID, text=msg_text, reply_markup=registration_application(msg.from_user.id))
+        for admin in ADMIN_ID:
+            await bot.send_message(chat_id=admin, text=msg_text,
+                                   reply_markup=registration_application(msg.from_user.id))
     else:
-        await msg.answer('Главное меню')
+        await msg.answer('Вы зарегистрированы как квартирант!\n'
+                         'Ожидайте оповещения о необходимости скинуть показания счетчиков')
 
 
-@dp.callback_query(F.data.startswith('readings_'))
+@tenant_router.callback_query(F.data.startswith('readings_'))
 async def start_readings_send(callback: CallbackQuery, state: FSMContext):
     """Начало скидывания показаний счетчиков"""
     await state.set_data({'tenant_id': callback.data.replace('readings_', '')})
@@ -34,7 +37,7 @@ async def start_readings_send(callback: CallbackQuery, state: FSMContext):
     await state.set_state(Tenant.cold_water)
 
 
-@dp.message(Tenant.cold_water)
+@tenant_router.message(Tenant.cold_water)
 async def cold_water(msg: Message, state: FSMContext):
     """Ловим холодную воду и просим скинуть горячую"""
     await state.update_data({'cold': msg.text})
@@ -42,7 +45,7 @@ async def cold_water(msg: Message, state: FSMContext):
     await state.set_state(Tenant.hot_water)
 
 
-@dp.message(Tenant.hot_water)
+@tenant_router.message(Tenant.hot_water)
 async def hot_water(msg: Message, state: FSMContext):
     """Ловим горячую воду и просим ввести электричество"""
     await state.update_data({'hot': msg.text})
@@ -65,7 +68,7 @@ async def view_readings(msg: Message, state: FSMContext):
     await state.set_state(Tenant.view_readings)
 
 
-@dp.message(Tenant.electricity)
+@tenant_router.message(Tenant.electricity)
 async def get_electricity(msg: Message, state: FSMContext):
     """Ловим электричество и выводим введенную информацию с возможностью изменить"""
 
@@ -74,7 +77,7 @@ async def get_electricity(msg: Message, state: FSMContext):
     await view_readings(msg=msg, state=state)
 
 
-@dp.callback_query(F.data.startswith('read_edit_'))
+@tenant_router.callback_query(F.data.startswith('read_edit_'))
 async def edit_readings(callback: CallbackQuery, state: FSMContext):
     """Запускаем замену показаний"""
     readings_editor_dict = {
@@ -89,35 +92,35 @@ async def edit_readings(callback: CallbackQuery, state: FSMContext):
     await state.set_state(readings_editor_dict[callback.data][0])
 
 
-@dp.message(Tenant.edit_cold_water)
+@tenant_router.message(Tenant.edit_cold_water)
 async def edit_cold_water(msg: Message, state: FSMContext):
     """Изменяем показания холодной воды"""
     await state.update_data({'cold': msg.text})
     await view_readings(msg=msg, state=state)
 
 
-@dp.message(Tenant.edit_hot_water)
+@tenant_router.message(Tenant.edit_hot_water)
 async def edit_hot_water(msg: Message, state: FSMContext):
     """Изменяем показания горячей воды"""
     await state.update_data({'hot': msg.text})
     await view_readings(msg=msg, state=state)
 
 
-@dp.message(Tenant.edit_electricity)
+@tenant_router.message(Tenant.edit_electricity)
 async def edit_electricity(msg: Message, state: FSMContext):
     """Изменяем показания электричества"""
     await state.update_data({'electricity': msg.text})
     await view_readings(msg=msg, state=state)
 
 
-@dp.message(Tenant.edit_heating)
+@tenant_router.message(Tenant.edit_heating)
 async def edit_heating(msg: Message, state: FSMContext):
     """Изменяем показания отопления"""
     await state.update_data({'heating': msg.text})
     await view_readings(msg=msg, state=state)
 
 
-@dp.callback_query(Tenant.view_readings, F.data.startswith('send_'))
+@tenant_router.callback_query(Tenant.view_readings, F.data.startswith('send_'))
 async def send_readings_func(callback: CallbackQuery, state: FSMContext):
     """Отправляем показания админу, предварительно подтвердив отправку"""
     await callback.answer()
@@ -146,7 +149,8 @@ async def send_readings_func(callback: CallbackQuery, state: FSMContext):
                     f'<b>🌡️ Отопление:</b> {readings["heating"]}\n\n'
                     f'<b>{datetime.datetime.now().strftime("%H:%M %d.%m.%Y")}</b>')
 
-        await bot.send_message(chat_id=ADMIN_ID, text=msg_text, reply_markup=readings_come(readings['tenant_id']))
+        for admin in ADMIN_ID:
+            await bot.send_message(chat_id=admin, text=msg_text, reply_markup=readings_come(readings['tenant_id']))
         await callback.message.answer('Показания отправлены, ожидайте подтверждение')
         await state.clear()
 
@@ -154,7 +158,7 @@ async def send_readings_func(callback: CallbackQuery, state: FSMContext):
         await view_readings(msg=callback.message, state=state)
 
 
-@dp.callback_query(F.data == 'check_send')
+@tenant_router.callback_query(F.data == 'check_send')
 async def send_check_start(callback: CallbackQuery, state: FSMContext):
     """Начинаем отправку чека"""
     await callback.answer()
@@ -163,7 +167,7 @@ async def send_check_start(callback: CallbackQuery, state: FSMContext):
     await callback.message.answer('Скиньте чек в виде фото или документа:')
 
 
-@dp.message(Tenant.send_check)
+@tenant_router.message(Tenant.send_check)
 async def catch_ten_check(msg: Message, state: FSMContext):
     """Ловим чек, либо фото, либо документ. Отправляем или предлагаем скинуть заново"""
     if msg.photo:
@@ -174,7 +178,7 @@ async def catch_ten_check(msg: Message, state: FSMContext):
         await msg.answer(text='Отправьте чек или скиньте заново', reply_markup=check_ready)
 
 
-@dp.callback_query(F.data == 'check_ready')
+@tenant_router.callback_query(F.data == 'check_ready')
 async def send_check_to_admin(callback: CallbackQuery, state: FSMContext):
     """Отправляем чек админу в соответствии с форматом"""
     await callback.answer()
@@ -189,31 +193,30 @@ async def send_check_to_admin(callback: CallbackQuery, state: FSMContext):
             # И сразу заносим чек в словарь для истории
 
             ten.readings_dict['check'] = payment_slip_info['check'][0] + '^^^^^' + \
-                                                payment_slip_info['check'][1]
+                                         payment_slip_info['check'][1]
 
             break
 
     msg_text = f'Чек от {ten_info}\n<b>{datetime.datetime.now().strftime("%H:%M %d.%m.%Y")}</b>'
 
     if payment_slip_info['check'][1] == 'photo':
-        await bot.send_photo(
-            chat_id=ADMIN_ID,
-            photo=payment_slip_info['check'][0],
-            caption=msg_text,
-            reply_markup=confirm_check(callback.from_user.id)
-        )
+        for admin in ADMIN_ID:
+            await bot.send_photo(
+                chat_id=admin,
+                photo=payment_slip_info['check'][0],
+                caption=msg_text,
+                reply_markup=confirm_check(callback.from_user.id)
+            )
         await state.clear()
 
     elif payment_slip_info['check'][1] == 'document':
-        await bot.send_document(
-            chat_id=ADMIN_ID,
-            document=payment_slip_info['check'][0],
-            caption=msg_text,
-            reply_markup=confirm_check(callback.from_user.id)
-        )
+        for admin in ADMIN_ID:
+            await bot.send_document(
+                chat_id=admin,
+                document=payment_slip_info['check'][0],
+                caption=msg_text,
+                reply_markup=confirm_check(callback.from_user.id)
+            )
         await state.clear()
 
     await callback.message.answer('Чек отправлен, ожидайте подтверждения')
-
-
-

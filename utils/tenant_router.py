@@ -5,7 +5,7 @@ from aiogram.types import Message
 from aiogram.filters import BaseFilter
 
 
-class IsAdminFilter(BaseFilter):
+class IsTenantFilter(BaseFilter):
     """Фильтр, проверяющий является ли отправитель сообщения админом"""
     def __init__(self, admins_list: List[int]):
 
@@ -13,10 +13,10 @@ class IsAdminFilter(BaseFilter):
         self.admins_list = admins_list
 
     async def __call__(self, message: Message) -> bool:
-        return message.from_user.id in self.admins_list
+        return message.from_user.id not in self.admins_list
 
 
-admin_router = Router()
+tenant_router = Router()
 
 # Выше описанный фильтр добавляем прямо в роутер
-admin_router.message.filter(IsAdminFilter(admins_list=ADMIN_ID))
+tenant_router.message.filter(IsTenantFilter(admins_list=ADMIN_ID))

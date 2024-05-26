@@ -14,7 +14,7 @@ class BotBase:
             cursor.execute('CREATE TABLE IF NOT EXISTS Tenants ('
                            'address TEXT,'
                            'name TEXT,'
-                           'user_id INTEGER'
+                           'user_id INTEGER PRIMARY KEY'
                            ');')
 
             # Таблица истории
@@ -48,7 +48,6 @@ class BotBase:
             cursor = connection.cursor()
             tenant_history = cursor.execute(f'SELECT * FROM History WHERE ten_id = {ten_id};').fetchall()
             return tenant_history
-
 
     # ========== Операции с квартирантами ==========
 

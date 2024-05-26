@@ -8,11 +8,12 @@ else:
     load_dotenv()
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
-ADMIN_ID = int(os.getenv('ADMIN_ID'))
+ADMIN_ID = os.getenv('ADMIN_ID').split(', ')
+ADMIN_ID = [int(a_id) for a_id in ADMIN_ID]
 
-# logging.basicConfig(
-#     filename='bot.log',
-#     filemode='a',
-#     format="%(asctime)s %(levelname)s %(message)s"
-# )
-# logging.getLogger().setLevel(logging.ERROR)
+logging.basicConfig(
+    filename='bot.log',
+    filemode='a',
+    format="%(asctime)s %(levelname)s %(message)s"
+)
+logging.getLogger().setLevel(logging.ERROR)
