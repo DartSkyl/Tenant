@@ -3,7 +3,7 @@ from loader import bot, tenant_list, bot_base
 from config.configurations import ADMIN_ID
 from utils.tenant_router import tenant_router
 from utils.tenant_model import Tenant
-from keyboards import (registration_application, readings_editor,
+from keyboards import (registration_application, readings_editor, need_heating,
                        confirm_sending, readings_come, check_ready, confirm_check)
 from states import Tenant
 
@@ -11,6 +11,20 @@ from aiogram.types import Message, CallbackQuery
 from aiogram import F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
+
+
+async def view_readings(msg: Message, state: FSMContext):
+    """Вывод введенных данных"""
+    readings_data = await state.get_data()
+    msg_text = (f'<b><i>Показания счетчиков:</i></b>\n\n'
+                f'<b>❄️ Холодная вода:</b> {readings_data["cold"]}\n'
+                f'<b>🔥 Горячая вода:</b> {readings_data["hot"]}\n'
+                f'<b>⚡ Электричество:</b>{readings_data["electricity"]}\n'
+                f'<b>🌡️ Отопление:</b> {readings_data["heating"]}')
+
+    await msg.answer('<b>Проверьте правильность введенных данных перед отправкой</b>❗')
+    await msg.answer(text=msg_text, reply_markup=readings_editor)
+    await state.set_state(Tenant.view_readings)
 
 
 @tenant_router.message(Command('start'))
@@ -33,48 +47,46 @@ async def start_readings_send(callback: CallbackQuery, state: FSMContext):
     """Начало скидывания показаний счетчиков"""
     await state.set_data({'tenant_id': callback.data.replace('readings_', '')})
     await callback.answer()
-    await callback.message.answer('Введите показания холодной воды:')
-    await state.set_state(Tenant.cold_water)
+    await callback.message.answer('Введите показания в следующем порядке:\n'
+                                  '<b>холодная вода горячая вода электричество</b>\n')
+    await state.set_state(Tenant.set_readings)
 
 
-@tenant_router.message(Tenant.cold_water)
-async def cold_water(msg: Message, state: FSMContext):
-    """Ловим холодную воду и просим скинуть горячую"""
-    await state.update_data({'cold': msg.text})
-    await msg.answer('Введите показания горячей воды')
-    await state.set_state(Tenant.hot_water)
+@tenant_router.message(Tenant.set_readings, F.text.regexp(r'\d{1,}\s\d{1,}\s\d{1,}$'))
+async def catch_readings(msg: Message, state: FSMContext):
+    """Ловим все показания разом"""
+    readings = msg.text.split()
+    await state.update_data({'cold': readings[0], 'hot': readings[1], 'electricity': readings[2]})
+    await msg.answer(text='Нужно указать отопление?', reply_markup=need_heating)
 
 
-@tenant_router.message(Tenant.hot_water)
-async def hot_water(msg: Message, state: FSMContext):
-    """Ловим горячую воду и просим ввести электричество"""
-    await state.update_data({'hot': msg.text})
-    await msg.answer('Введите показания электричества')
-    await state.set_state(Tenant.electricity)
+@tenant_router.message(Tenant.set_readings)
+async def error_input(msg: Message):
+    """Ошибочный ввод показаний"""
+    await msg.answer('Нужно ввести целые число без запятых и лишних пробелов❗')
 
 
-async def view_readings(msg: Message, state: FSMContext):
-    """Вывод введенных данных"""
-    readings_data = await state.get_data()
-    msg_text = (f'<b><i>Показания счетчиков:</i></b>\n\n'
-                f'<b>❄️ Холодная вода:</b> {readings_data["cold"]}\n'
-                f'<b>🔥 Горячая вода:</b> {readings_data["hot"]}\n'
-                f'<b>⚡ Электричество:</b>{readings_data["electricity"]}\n'
-                f'<b>🌡️ Отопление:</b> {readings_data["heating"]}')
-
-    await msg.answer('<b>Проверьте правильность введенных данных перед отправкой!\n'
-                     'Так же укажите отопление, если необходимо</b>❗')
-    await msg.answer(text=msg_text, reply_markup=readings_editor)
-    await state.set_state(Tenant.view_readings)
+@tenant_router.callback_query(F.data == 'heating_yes')
+async def heating(callback: CallbackQuery, state: FSMContext):
+    """Стартуем ловлю тепла"""
+    await callback.answer()
+    await callback.message.answer('Введите показания отопления:')
+    await state.set_state(Tenant.heating)
 
 
-@tenant_router.message(Tenant.electricity)
-async def get_electricity(msg: Message, state: FSMContext):
-    """Ловим электричество и выводим введенную информацию с возможностью изменить"""
-
-    # Так же вставим значения для отопления, которое можно будет изменить перед отправкой если нужно
-    await state.update_data({'electricity': msg.text, 'heating': '0'})
+@tenant_router.message(Tenant.heating)
+async def catch_heating(msg: Message, state: FSMContext):
+    """Ловим тепло и активируем показ собранных показаний"""
+    await state.update_data({'heating': msg.text})
     await view_readings(msg=msg, state=state)
+
+
+@tenant_router.callback_query(F.data == 'heating_no')
+async def no_heating(callback: CallbackQuery, state: FSMContext):
+    """Если отопление не нужно, то просто включаем показ собранных данных"""
+    await callback.answer()
+    await state.update_data({'heating': '0'})
+    await view_readings(msg=callback.message, state=state)
 
 
 @tenant_router.callback_query(F.data.startswith('read_edit_'))
@@ -162,20 +174,33 @@ async def send_readings_func(callback: CallbackQuery, state: FSMContext):
 async def send_check_start(callback: CallbackQuery, state: FSMContext):
     """Начинаем отправку чека"""
     await callback.answer()
-    await state.set_state(Tenant.send_check)
-    # await state.set_data({'ten_check_id': callback.from_user.id})
+    await state.set_state(Tenant.send_first_check)
     await callback.message.answer('Скиньте чек в виде фото или документа:')
 
 
-@tenant_router.message(Tenant.send_check)
-async def catch_ten_check(msg: Message, state: FSMContext):
+@tenant_router.message(Tenant.send_first_check)
+async def catch_first_ten_check(msg: Message, state: FSMContext):
     """Ловим чек, либо фото, либо документ. Отправляем или предлагаем скинуть заново"""
     if msg.photo:
-        await state.update_data({'check': (msg.photo[-1].file_id, 'photo')})
-        await msg.answer(text='Отправьте чек или скиньте заново', reply_markup=check_ready)
+        await state.update_data({'first_check': (msg.photo[-1].file_id, 'photo')})
+        await msg.answer('Скиньте второй чек:')
+        await state.set_state(Tenant.send_second_check)
     elif msg.document:
-        await state.update_data({'check': (msg.document.file_id, 'document')})
-        await msg.answer(text='Отправьте чек или скиньте заново', reply_markup=check_ready)
+        await state.update_data({'first_check': (msg.document.file_id, 'document')})
+        await msg.answer('Скиньте второй чек:')
+        await state.set_state(Tenant.send_second_check)
+
+
+@tenant_router.message(Tenant.send_second_check)
+async def catch_second_ten_check(msg: Message, state: FSMContext):
+    """Ловим чек, либо фото, либо документ. Отправляем или предлагаем скинуть заново"""
+    if msg.photo:
+        await state.update_data({'second_check': (msg.photo[-1].file_id, 'photo')})
+        await msg.answer(text='Готово! Отправьте чеки или скиньте заново',reply_markup=check_ready)
+
+    elif msg.document:
+        await state.update_data({'second_check': (msg.document.file_id, 'document')})
+        await msg.answer(text='Готово! Отправьте чеки или скиньте заново', reply_markup=check_ready)
 
 
 @tenant_router.callback_query(F.data == 'check_ready')
@@ -192,31 +217,53 @@ async def send_check_to_admin(callback: CallbackQuery, state: FSMContext):
 
             # И сразу заносим чек в словарь для истории
 
-            ten.readings_dict['check'] = payment_slip_info['check'][0] + '^^^^^' + \
-                                         payment_slip_info['check'][1]
+            ten.readings_dict['check'] = payment_slip_info['first_check'][0] + '^^^^^' + payment_slip_info['first_check'][1] + '$$$'
+            ten.readings_dict['check'] += payment_slip_info['second_check'][0] + '^^^^^' + payment_slip_info['second_check'][1]
 
             break
 
     msg_text = f'Чек от {ten_info}\n<b>{datetime.datetime.now().strftime("%H:%M %d.%m.%Y")}</b>'
 
-    if payment_slip_info['check'][1] == 'photo':
+    if payment_slip_info['first_check'][1] == 'photo':
         for admin in ADMIN_ID:
             await bot.send_photo(
                 chat_id=admin,
-                photo=payment_slip_info['check'][0],
+                photo=payment_slip_info['first_check'][0],
                 caption=msg_text,
-                reply_markup=confirm_check(callback.from_user.id)
             )
         await state.clear()
 
-    elif payment_slip_info['check'][1] == 'document':
+    elif payment_slip_info['first_check'][1] == 'document':
         for admin in ADMIN_ID:
             await bot.send_document(
                 chat_id=admin,
-                document=payment_slip_info['check'][0],
+                document=payment_slip_info['first_check'][0],
                 caption=msg_text,
-                reply_markup=confirm_check(callback.from_user.id)
             )
         await state.clear()
 
+    if payment_slip_info['second_check'][1] == 'photo':
+        for admin in ADMIN_ID:
+            await bot.send_photo(
+                chat_id=admin,
+                photo=payment_slip_info['second_check'][0],
+                caption=msg_text,
+                reply_markup=confirm_check(callback.from_user.id)
+            )
+
+    elif payment_slip_info['second_check'][1] == 'document':
+        for admin in ADMIN_ID:
+            await bot.send_document(
+                chat_id=admin,
+                document=payment_slip_info['second_check'][0],
+                caption=msg_text,
+                reply_markup=confirm_check(callback.from_user.id)
+            )
+
     await callback.message.answer('Чек отправлен, ожидайте подтверждения')
+
+
+@tenant_router.callback_query(F.data == 'check_del')
+async def reload_check(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(Tenant.send_first_check)
+    await callback.message.answer('Скиньте чек в виде фото или документа:')

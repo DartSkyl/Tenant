@@ -7,6 +7,11 @@ def readings_send_init(ten_id):
     return rsi_kb.as_markup()
 
 
+need_heating = InlineKeyboardMarkup(inline_keyboard=[
+    [InlineKeyboardButton(text='Да', callback_data='heating_yes'),
+     InlineKeyboardButton(text='Нет', callback_data='heating_no')]
+])
+
 readings_editor = InlineKeyboardMarkup(inline_keyboard=[
     [InlineKeyboardButton(text='❄️ Изменить холодную воду', callback_data='read_edit_cold')],
     [InlineKeyboardButton(text='🔥 Изменить горячую воду', callback_data='read_edit_hot')],
@@ -25,5 +30,6 @@ send_check = InlineKeyboardMarkup(inline_keyboard=[
 ])
 
 check_ready = InlineKeyboardMarkup(inline_keyboard=[
-    [InlineKeyboardButton(text='📨 Отправить чек', callback_data='check_ready')]
+    [InlineKeyboardButton(text='📨 Отправить чек', callback_data='check_ready')],
+    [InlineKeyboardButton(text='⛔ Скинуть чеки заново', callback_data='check_del')]
 ])

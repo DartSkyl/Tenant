@@ -2,9 +2,9 @@ from aiogram.fsm.state import StatesGroup, State
 
 
 class Tenant(StatesGroup):
-    cold_water = State()
-    hot_water = State()
-    electricity = State()
+    set_readings = State()
+    heating = State()
+
     view_readings = State()
 
     edit_cold_water = State()
@@ -12,4 +12,5 @@ class Tenant(StatesGroup):
     edit_electricity = State()
     edit_heating = State()
 
-    send_check = State()
+    send_first_check = State()
+    send_second_check = State()

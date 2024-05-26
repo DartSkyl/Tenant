@@ -22,6 +22,9 @@ async def start_function(msg: Message, state: FSMContext):
     await msg.answer(text='Главное меню:', reply_markup=main_menu)
 
 
+# ========== Основной функционал ==========
+
+
 @admin_router.callback_query(F.data.startswith('rd_come_'))
 async def catch_readings(callback: CallbackQuery, state: FSMContext):
     """Подтверждаем получение показаний"""
@@ -37,7 +40,6 @@ async def catch_readings(callback: CallbackQuery, state: FSMContext):
 
     for admin in ADMIN_ID:
         await bot.send_message(chat_id=admin, text=msg_text, reply_markup=send_payment_slip(ten_id))
-    # await callback.message.answer(text=msg_text, reply_markup=send_payment_slip(ten_id))
 
 
 @admin_router.callback_query(F.data.startswith('send_ps_'))
@@ -45,61 +47,96 @@ async def send_payment(callback: CallbackQuery, state: FSMContext):
     """Предлагаем скинуть документ с платежкой и сохраняем ID адресата"""
     await callback.answer()
     await state.set_data({'ten_id': int(callback.data.replace('send_ps_', ''))})
-    await state.set_state(AdminStates.send_payment_slip)
-    await callback.message.answer('Скиньте платежку')
+    await state.set_state(AdminStates.send_first_payment_slip)
+    await callback.message.answer('Скиньте первую платежку:')
 
 
-@admin_router.message(AdminStates.send_payment_slip)
-async def catch_payment_slip(msg: Message, state: FSMContext):
+@admin_router.message(AdminStates.send_first_payment_slip)
+async def catch_first_payment_slip(msg: Message, state: FSMContext):
+    """Ловим платежку. Может быть фото либо документ"""
+    if msg.photo:
+        await state.update_data({'first_payment_slip': (msg.photo[-1].file_id, 'photo')})
+        await msg.answer('Скиньте вторую платежку:')
+        await state.set_state(AdminStates.send_second_payment_slip)
+    elif msg.document:
+        await state.update_data({'first_payment_slip': (msg.document.file_id, 'document')})
+        await msg.answer('Скиньте вторую платежку:')
+        await state.set_state(AdminStates.send_second_payment_slip)
+
+
+@admin_router.message(AdminStates.send_second_payment_slip)
+async def catch_second_payment_slip(msg: Message, state: FSMContext):
     """Ловим платежку. Может быть фото либо документ"""
     ten_id = (await state.get_data())['ten_id']
+
     if msg.photo:
-        await state.update_data({'payment_slip': (msg.photo[-1].file_id, 'photo')})
-        await msg.answer(text='Отправьте платежку или скиньте заново', reply_markup=send_ps(ten_id))
+        await state.update_data({'second_payment_slip': (msg.photo[-1].file_id, 'photo')})
+        await msg.answer(text='Готово! Отправьте платежки или скиньте заново', reply_markup=send_ps(ten_id))
+
     elif msg.document:
-        await state.update_data({'payment_slip': (msg.document.file_id, 'document')})
-        await msg.answer(text='Отправьте платежку или скиньте заново', reply_markup=send_ps(ten_id))
+        await state.update_data({'second_payment_slip': (msg.document.file_id, 'document')})
+        await msg.answer(text='Готово! Отправьте платежки или скиньте заново', reply_markup=send_ps(ten_id))
 
 
-@admin_router.callback_query(AdminStates.send_payment_slip, F.data.startswith('sps_'))
+@admin_router.callback_query(AdminStates.send_second_payment_slip, F.data.startswith('sps_'))
 async def payment_slip_go_to_tenant(callback: CallbackQuery, state: FSMContext):
     """Отправляем платежку адресату"""
     await callback.answer()
-    payment_slip_info = await state.get_data()
 
-    ten_info = ''
+    if callback.data != 'sps_del':
 
-    for ten in tenant_list:
-        if ten.get_tenant_id() == payment_slip_info['ten_id']:
-            ten_info += ten.get_info_string()
+        payment_slip_info = await state.get_data()
 
-            # И сразу заносим платежку в словарь для истории
+        ten_info = ''
 
-            ten.readings_dict['payment_slip'] = payment_slip_info['payment_slip'][0] + '^^^^^' + payment_slip_info['payment_slip'][1]
-            break
-    msg_text = f'Платежка для {ten_info} отправлена'
+        for ten in tenant_list:
+            if ten.get_tenant_id() == payment_slip_info['ten_id']:
+                ten_info += ten.get_info_string()
 
-    if payment_slip_info['payment_slip'][1] == 'photo':
-        await bot.send_photo(
-            chat_id=payment_slip_info['ten_id'],
-            photo=payment_slip_info['payment_slip'][0],
-            caption=f'<b>{datetime.datetime.now().strftime("%H:%M %d.%m.%Y")}</b>',
-            reply_markup=send_check
-        )
-        await state.clear()
+                # И сразу заносим платежку в словарь для истории
 
-    elif payment_slip_info['payment_slip'][1] == 'document':
-        await bot.send_document(
-            chat_id=payment_slip_info['ten_id'],
-            document=payment_slip_info['payment_slip'][0],
-            caption=f'<b>{datetime.datetime.now().strftime("%H:%M %d.%m.%Y")}</b>',
-            reply_markup=send_check
-        )
-        await state.clear()
+                ten.readings_dict['payment_slip'] = payment_slip_info['first_payment_slip'][0] + '^^^^^' + payment_slip_info['first_payment_slip'][1] + '$$$'
+                ten.readings_dict['payment_slip'] += payment_slip_info['second_payment_slip'][0] + '^^^^^' + payment_slip_info['second_payment_slip'][1]
+                break
+        msg_text = f'Платежка для {ten_info} отправлена'
 
-    for admin in ADMIN_ID:
-        await bot.send_message(chat_id=admin, text=msg_text)
-    # await callback.message.answer(msg_text)
+        if payment_slip_info['first_payment_slip'][1] == 'photo':
+            await bot.send_photo(
+                chat_id=payment_slip_info['ten_id'],
+                photo=payment_slip_info['first_payment_slip'][0],
+                caption=f'<b>{datetime.datetime.now().strftime("%H:%M %d.%m.%Y")}</b>',
+            )
+            await state.clear()
+
+        elif payment_slip_info['first_payment_slip'][1] == 'document':
+            await bot.send_document(
+                chat_id=payment_slip_info['ten_id'],
+                document=payment_slip_info['first_payment_slip'][0],
+                caption=f'<b>{datetime.datetime.now().strftime("%H:%M %d.%m.%Y")}</b>',
+            )
+            await state.clear()
+
+        if payment_slip_info['second_payment_slip'][1] == 'photo':
+            await bot.send_photo(
+                chat_id=payment_slip_info['ten_id'],
+                photo=payment_slip_info['second_payment_slip'][0],
+                caption=f'<b>{datetime.datetime.now().strftime("%H:%M %d.%m.%Y")}</b>',
+                reply_markup=send_check
+            )
+
+        elif payment_slip_info['second_payment_slip'][1] == 'document':
+            await bot.send_document(
+                chat_id=payment_slip_info['ten_id'],
+                document=payment_slip_info['second_payment_slip'][0],
+                caption=f'<b>{datetime.datetime.now().strftime("%H:%M %d.%m.%Y")}</b>',
+                reply_markup=send_check
+            )
+
+        for admin in ADMIN_ID:
+            await bot.send_message(chat_id=admin, text=msg_text)
+    else:
+        await state.set_state(AdminStates.send_first_payment_slip)
+        await callback.message.answer('Скиньте первую платежку:')
 
 
 @admin_router.callback_query(F.data.startswith('ch_conf_'))
@@ -158,22 +195,26 @@ async def view_tenant_history(callback: CallbackQuery, state: FSMContext):
 async def view_payment_slip(callback: CallbackQuery, state: FSMContext):
     """Отправляем в чат платежку"""
     await callback.answer()
-    pay_slip = (await state.get_data())[callback.data.replace('p_', '')][0].split('^^^^^')
-    if pay_slip[1] == 'document':
-        await callback.message.answer_document(document=pay_slip[0])
-    else:
-        await callback.message.answer_photo(photo=pay_slip[0])
+    pay_slip = (await state.get_data())[callback.data.replace('p_', '')][0].split('$$$')
+    pay_slip = [pay.split('^^^^^') for pay in pay_slip]
+    for pay in pay_slip:
+        if pay[1] == 'document':
+            await callback.message.answer_document(document=pay[0])
+        else:
+            await callback.message.answer_photo(photo=pay[0])
 
 
 @admin_router.callback_query(F.data.startswith('ch_'))
 async def view_payment_check(callback: CallbackQuery, state: FSMContext):
     """Отправляем в чат чек оплаты коммуналки"""
     await callback.answer()
-    check = (await state.get_data())[callback.data.replace('ch_', '')][1].split('^^^^^')
-    if check[1] == 'document':
-        await callback.message.answer_document(document=check[0])
-    else:
-        await callback.message.answer_photo(photo=check[0])
+    check = (await state.get_data())[callback.data.replace('ch_', '')][1].split('$$$')
+    check = [pay.split('^^^^^') for pay in check]
+    for pay in check:
+        if pay[1] == 'document':
+            await callback.message.answer_document(document=pay[0])
+        else:
+            await callback.message.answer_photo(photo=pay[0])
 
 
 # ========== Просмотр/удаление квартирантов ==========

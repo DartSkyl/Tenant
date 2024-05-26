@@ -20,4 +20,5 @@ class AdminStates(StatesGroup):
 
     # Отправка платежки
 
-    send_payment_slip = State()
+    send_first_payment_slip = State()
+    send_second_payment_slip = State()

@@ -36,6 +36,8 @@ def send_payment_slip(ten_id):
 def send_ps(ten_id):
     send = InlineKeyboardBuilder()
     send.button(text='📨 Отправить платежку', callback_data=f'sps_{ten_id}')
+    send.button(text='⛔ Скинуть платежки заново', callback_data='sps_del')
+    send.adjust(1)
     return send.as_markup()
 
 
