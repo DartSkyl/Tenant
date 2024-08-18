@@ -49,7 +49,8 @@ def confirm_check(ten_id):
 
 def viewing_tenant(ten_id):
     view_ten = InlineKeyboardBuilder()
-    view_ten.button(text='📂 Посмотреть историю', callback_data=f'hist_{ten_id}')
+    view_ten.button(text='📂 Посмотреть историю (оплачено)', callback_data=f'hist_true_{ten_id}')
+    view_ten.button(text='📃 Не оплачено', callback_data=f'hist_false_{ten_id}')
     view_ten.button(text='❌ Удалить квартиранта', callback_data=f'del_{ten_id}')
     view_ten.adjust(1)
     return view_ten.as_markup()
@@ -61,9 +62,10 @@ ten_rem_conf = InlineKeyboardMarkup(inline_keyboard=[
 ])
 
 
-def view_history_checks(doc_key):
+def view_history_checks(doc_key, pay_status=False):
     view_t = InlineKeyboardBuilder()
     view_t.button(text='🧾 Посмотреть платежку', callback_data=f'p_{doc_key}')
-    view_t.button(text='📃 Посмотреть чек оплаты', callback_data=f'ch_{doc_key}')
+    if pay_status:
+        view_t.button(text='📃 Посмотреть чек оплаты', callback_data=f'ch_{doc_key}')
     view_t.adjust(1)
     return view_t.as_markup()

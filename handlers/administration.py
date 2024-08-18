@@ -95,8 +95,10 @@ async def payment_slip_go_to_tenant(callback: CallbackQuery, state: FSMContext):
 
                 # И сразу заносим платежку в словарь для истории
 
-                ten.readings_dict['payment_slip'] = payment_slip_info['first_payment_slip'][0] + '^^^^^' + payment_slip_info['first_payment_slip'][1] + '$$$'
-                ten.readings_dict['payment_slip'] += payment_slip_info['second_payment_slip'][0] + '^^^^^' + payment_slip_info['second_payment_slip'][1]
+                ten.readings_dict['payment_slip'] = payment_slip_info['first_payment_slip'][0] + '^^^^^' + \
+                                                    payment_slip_info['first_payment_slip'][1] + '$$$'
+                ten.readings_dict['payment_slip'] += payment_slip_info['second_payment_slip'][0] + '^^^^^' + \
+                                                     payment_slip_info['second_payment_slip'][1]
                 break
         msg_text = f'Платежка для {ten_info} отправлена'
 
@@ -160,6 +162,7 @@ async def check_confirming(callback: CallbackQuery, state: FSMContext):
                 payment_slip=ten.readings_dict['payment_slip'],
                 check_id=ten.readings_dict['check']
             )
+            ten.reset_readings()
             break
     await bot.send_message(chat_id=ten_id, text='Получение чека подтверждено')
 
@@ -168,17 +171,16 @@ async def check_confirming(callback: CallbackQuery, state: FSMContext):
 
     for admin in ADMIN_ID:
         await bot.send_message(chat_id=admin, text=msg_text)
-    # await callback.message.answer(msg_text)
 
 
 # ========== Просмотр истории квартирантов ==========
 
-@admin_router.callback_query(F.data.startswith('hist_'))
-async def view_tenant_history(callback: CallbackQuery, state: FSMContext):
-    """Показываем историю конкретного квартиранта"""
+@admin_router.callback_query(F.data.startswith('hist_true_'))
+async def view_tenant_history_pay(callback: CallbackQuery, state: FSMContext):
+    """Показываем оплаченную историю конкретного квартиранта"""
     await callback.answer()
     await state.set_data({'empty': None})  # Заглушка для того, что бы просто задать data и использовать ниже
-    ten_history = await bot_base.get_tenant_history(callback.data.replace('hist_', ''))
+    ten_history = await bot_base.get_tenant_history(callback.data.replace('hist_true_', ''))
     for elem in ten_history:
         msg_text = (f'<b>📆 Отчетный период:</b> {elem[1]}\n'
                     f'<b>❄️ Холодная вода:</b> {elem[2]}\n'
@@ -190,7 +192,35 @@ async def view_tenant_history(callback: CallbackQuery, state: FSMContext):
         # Ключ это ID квартиранта и дата отчетного периода. Значение это file_id платежки и чека
         # Да извращение, но лучше я ничего не придумал!
         await state.update_data({f'{elem[0]}_{elem[1]}': (f'{elem[7]}', f'{elem[8]}')})
-        await callback.message.answer(text=msg_text, reply_markup=view_history_checks(f'{elem[0]}_{elem[1]}'))
+        await callback.message.answer(
+            text=msg_text,
+            reply_markup=view_history_checks(f'{elem[0]}_{elem[1]}',
+                                             pay_status=True)
+        )
+
+
+@admin_router.callback_query(F.data.startswith('hist_false_'))
+async def view_tenant_history_(callback: CallbackQuery, state: FSMContext):
+    """Показываем неоплаченный период, то есть текущий месяц"""
+    await callback.answer()
+    empty_answer = 'На данный момент все оплачено'
+    message_markup = None
+    ten_id = int(callback.data.replace('hist_false_', ''))
+    for ten in tenant_list:
+        if ten.get_tenant_id() == ten_id:
+            ten_readings_info = ten.get_readings_dict()
+            msg_text = (f'<b>📆 Отчетный период:</b> {ten_readings_info["reporting_date"]}\n'
+                        f'<b>❄️ Холодная вода:</b> {ten_readings_info["cold"]}\n'
+                        f'<b>🔥 Горячая вода:</b> {ten_readings_info["hot"]}\n'
+                        f'<b>⚡ Электричество день:</b> {ten_readings_info["electricity_day"]}\n'
+                        f'<b>⚡ Электричество ночь:</b> {ten_readings_info["electricity_night"]}\n'
+                        f'<b>🌡️ Отопление:</b> {ten_readings_info["heating"]}') if ten_readings_info["cold"] else (
+                empty_answer)
+            if ten_readings_info["payment_slip"]:
+                await state.set_data({'payment_slip': (ten_readings_info["payment_slip"], '')})
+                message_markup = view_history_checks(doc_key='payment_slip')
+            await callback.message.answer(text=msg_text, reply_markup=message_markup)
+            break
 
 
 @admin_router.callback_query(F.data.startswith('p_'))
@@ -385,8 +415,9 @@ async def edit_tenant_data_func(callback: CallbackQuery, state: FSMContext):
 
             for admin in ADMIN_ID:
                 if admin != callback.from_user.id:
-                    await bot.send_message(chat_id=admin, text=f'Зарегистрирован квартирант <b>{tenant_data["name"]}</b>'
-                                           f' по адресу <b>{tenant_data["address"]}</b>')
+                    await bot.send_message(chat_id=admin,
+                                           text=f'Зарегистрирован квартирант <b>{tenant_data["name"]}</b>'
+                                                f' по адресу <b>{tenant_data["address"]}</b>')
         except IntegrityError:
             await callback.message.answer('Квартирант уже зарегистрирован!')
         await start_function(msg=callback.message, state=state)
