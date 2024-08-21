@@ -22,3 +22,5 @@ class AdminStates(StatesGroup):
 
     send_first_payment_slip = State()
     send_second_payment_slip = State()
+
+    view_history = State()

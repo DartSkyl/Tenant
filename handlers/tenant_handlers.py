@@ -216,14 +216,14 @@ async def catch_second_ten_check(msg: Message, state: FSMContext):
     """Ловим чек, либо фото, либо документ. Отправляем или предлагаем скинуть заново"""
     if msg.photo:
         await state.update_data({'second_check': (msg.photo[-1].file_id, 'photo')})
-        await msg.answer(text='Готово! Отправьте чеки или скиньте заново',reply_markup=check_ready)
+        await msg.answer(text='Готово! Отправьте чеки или скиньте заново', reply_markup=check_ready)
 
     elif msg.document:
         await state.update_data({'second_check': (msg.document.file_id, 'document')})
         await msg.answer(text='Готово! Отправьте чеки или скиньте заново', reply_markup=check_ready)
 
 
-@tenant_router.callback_query(F.data == 'check_ready')
+@tenant_router.callback_query(F.data == 'check_ready', Tenant.send_second_check)
 async def send_check_to_admin(callback: CallbackQuery, state: FSMContext):
     """Отправляем чек админу в соответствии с форматом"""
     await callback.answer()
@@ -251,7 +251,6 @@ async def send_check_to_admin(callback: CallbackQuery, state: FSMContext):
                 photo=payment_slip_info['first_check'][0],
                 caption=msg_text,
             )
-        await state.clear()
 
     elif payment_slip_info['first_check'][1] == 'document':
         for admin in ADMIN_ID:
@@ -260,7 +259,6 @@ async def send_check_to_admin(callback: CallbackQuery, state: FSMContext):
                 document=payment_slip_info['first_check'][0],
                 caption=msg_text,
             )
-        await state.clear()
 
     if payment_slip_info['second_check'][1] == 'photo':
         for admin in ADMIN_ID:
@@ -280,10 +278,107 @@ async def send_check_to_admin(callback: CallbackQuery, state: FSMContext):
                 reply_markup=confirm_check(callback.from_user.id)
             )
 
+    await state.clear()
     await callback.message.answer('Чек отправлен, ожидайте подтверждения')
 
 
-@tenant_router.callback_query(F.data == 'check_del')
+# ========= Секция долгов =========
+
+
+@tenant_router.callback_query(F.data.startswith('debt_'))
+async def debt_handler(callback: CallbackQuery, state: FSMContext):
+    print(callback.data)
+    await callback.answer()
+    await state.set_state(Tenant.debt_send_first_check)
+    await state.set_data({'debt': callback.data.split('_')[2]})  # Информация о периоде задолженности
+    await callback.message.answer('Скиньте чек в виде фото или документа:')
+
+
+@tenant_router.message(Tenant.debt_send_first_check)
+async def catch_first_debt_ten_check(msg: Message, state: FSMContext):
+    """Ловим чек, либо фото, либо документ. Отправляем или предлагаем скинуть заново"""
+    if msg.photo:
+        await state.update_data({'first_check': (msg.photo[-1].file_id, 'photo')})
+        await msg.answer('Скиньте второй чек:')
+        await state.set_state(Tenant.debt_send_second_check)
+    elif msg.document:
+        await state.update_data({'first_check': (msg.document.file_id, 'document')})
+        await msg.answer('Скиньте второй чек:')
+        await state.set_state(Tenant.debt_send_second_check)
+
+
+@tenant_router.message(Tenant.debt_send_second_check)
+async def catch_second_ten_check(msg: Message, state: FSMContext):
+    """Ловим чек, либо фото, либо документ. Отправляем или предлагаем скинуть заново"""
+    if msg.photo:
+        await state.update_data({'second_check': (msg.photo[-1].file_id, 'photo')})
+        await msg.answer(text='Готово! Отправьте чеки или скиньте заново', reply_markup=check_ready)
+
+    elif msg.document:
+        await state.update_data({'second_check': (msg.document.file_id, 'document')})
+        await msg.answer(text='Готово! Отправьте чеки или скиньте заново', reply_markup=check_ready)
+
+
+@tenant_router.callback_query(F.data == 'check_ready', Tenant.debt_send_second_check)
+async def send_check_to_admin(callback: CallbackQuery, state: FSMContext):
+    """Отправляем чек админу в соответствии с форматом"""
+    await callback.answer()
+    payment_slip_info = await state.get_data()
+
+    ten_info = ''
+
+    for ten in tenant_list:
+        if ten.get_tenant_id() == callback.from_user.id:
+            ten_info += ten.get_info_string()
+
+            # И сразу заносим чек в словарь для истории
+
+            ten.dept_check = payment_slip_info['first_check'][0] + '^^^^^' + payment_slip_info['first_check'][1] + '$$$'
+            ten.dept_check += payment_slip_info['second_check'][0] + '^^^^^' + payment_slip_info['second_check'][1]
+
+            break
+
+    msg_text = f'Чек от {ten_info}\n<b>{datetime.datetime.now().strftime("%H:%M %d.%m.%Y")} по задолженности от {payment_slip_info["debt"]}</b>'
+
+    if payment_slip_info['first_check'][1] == 'photo':
+        for admin in ADMIN_ID:
+            await bot.send_photo(
+                chat_id=admin,
+                photo=payment_slip_info['first_check'][0],
+                caption=msg_text,
+            )
+
+    elif payment_slip_info['first_check'][1] == 'document':
+        for admin in ADMIN_ID:
+            await bot.send_document(
+                chat_id=admin,
+                document=payment_slip_info['first_check'][0],
+                caption=msg_text,
+            )
+
+    if payment_slip_info['second_check'][1] == 'photo':
+        for admin in ADMIN_ID:
+            await bot.send_photo(
+                chat_id=admin,
+                photo=payment_slip_info['second_check'][0],
+                caption=msg_text,
+                reply_markup=confirm_check(callback.from_user.id, debt_info=payment_slip_info["debt"])
+            )
+
+    elif payment_slip_info['second_check'][1] == 'document':
+        for admin in ADMIN_ID:
+            await bot.send_document(
+                chat_id=admin,
+                document=payment_slip_info['second_check'][0],
+                caption=msg_text,
+                reply_markup=confirm_check(callback.from_user.id)
+            )
+
+    await state.clear()
+    await callback.message.answer('Чек отправлен, ожидайте подтверждения')
+
+
+@tenant_router.callback_query(F.data == 'check_del', Tenant.send_second_check)
 async def reload_check(callback: CallbackQuery, state: FSMContext):
     await state.set_state(Tenant.send_first_check)
     await callback.message.answer('Скиньте чек в виде фото или документа:')

@@ -30,6 +30,13 @@ send_check = InlineKeyboardMarkup(inline_keyboard=[
     [InlineKeyboardButton(text='🧾 Скинуть чек', callback_data='check_send')]
 ])
 
+
+def  send_debt_check(debt_id):
+    debt_check = InlineKeyboardBuilder()
+    debt_check.button(text='🧾 Скинуть чек', callback_data=f'debt_{debt_id}')
+    return debt_check.as_markup()
+
+
 check_ready = InlineKeyboardMarkup(inline_keyboard=[
     [InlineKeyboardButton(text='📨 Отправить чек', callback_data='check_ready')],
     [InlineKeyboardButton(text='⛔ Скинуть чеки заново', callback_data='check_del')]

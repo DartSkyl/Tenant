@@ -1,7 +1,7 @@
 from .reply.admin_rk import main_menu
 from .inline.admin_ik import (edit_tenant_data, registration_application, confirm_check, ten_rem_conf,
                               settings, readings_come, send_payment_slip, send_ps, viewing_tenant, view_history_checks)
-from .inline.tenant_ik import readings_send_init, readings_editor, confirm_sending, send_check, check_ready, need_heating
+from .inline.tenant_ik import readings_send_init, readings_editor, confirm_sending, send_check, check_ready, need_heating, send_debt_check
 
 
 __all__ = (
@@ -24,5 +24,6 @@ __all__ = (
     'confirm_sending',
     'send_check',
     'check_ready',
-    'need_heating'
+    'need_heating',
+    'send_debt_check'
 )

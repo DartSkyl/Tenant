@@ -29,6 +29,16 @@ class BotBase:
                            'check_id TEXT'
                            ');')
 
+            cursor.execute('CREATE TABLE IF NOT EXISTS Debt (ten_id INTEGER,'
+                           'reporting_date TEXT,'
+                           'cold TEXT,'
+                           'hot TEXT,'
+                           'electricity_day TEXT,'
+                           'electricity_night TEXT,'
+                           'heating TEXT,'
+                           'payment_slip TEXT'
+                           ');')
+
             connection.commit()
 
     # ========== Операции с историей о квартплате ==========
@@ -49,6 +59,37 @@ class BotBase:
             cursor = connection.cursor()
             tenant_history = cursor.execute(f'SELECT * FROM History WHERE ten_id = {ten_id};').fetchall()
             return tenant_history
+
+    @staticmethod
+    async def add_dept(ten_id, data, cold, hot, electricity_day, electricity_night, heating, payment_slip):
+        """Вставляем сразу все столбцы"""
+        with sqlite3.connect('tenant_base.db') as connection:
+            cursor = connection.cursor()
+            cursor.execute(f'INSERT INTO Debt (ten_id, reporting_date, cold, hot,'
+                           f'electricity_day, electricity_night, heating, payment_slip) '
+                           f'VALUES ({ten_id}, "{data}", "{cold}", "{hot}", "{electricity_day}", "{electricity_night}", "{heating}", "{payment_slip}")')
+            connection.commit()
+
+    @staticmethod
+    async def remove_dept(ten_id, data):
+        with sqlite3.connect('tenant_base.db') as connection:
+            cursor = connection.cursor()
+            cursor.execute(f'DELETE FROM Debt WHERE ten_id = {ten_id} AND reporting_date = "{data}"')
+            connection.commit()
+
+    @staticmethod
+    async def get_all_dept(ten_id):
+        with sqlite3.connect('tenant_base.db') as connection:
+            cursor = connection.cursor()
+            debt_history = cursor.execute(f'SELECT * FROM Debt WHERE ten_id = {ten_id}').fetchall()
+            return debt_history
+
+    @staticmethod
+    async def get_dept(ten_id, data):
+        with sqlite3.connect('tenant_base.db') as connection:
+            cursor = connection.cursor()
+            debt_history = cursor.execute(f'SELECT * FROM Debt WHERE ten_id = {ten_id} AND reporting_date = "{data}"').fetchall()
+            return debt_history
 
     # ========== Операции с квартирантами ==========
 

@@ -41,15 +41,19 @@ def send_ps(ten_id):
     return send.as_markup()
 
 
-def confirm_check(ten_id):
+def confirm_check(ten_id, debt_info=None):
     conf = InlineKeyboardBuilder()
-    conf.button(text='✅ Подтвердить получение чека', callback_data=f'ch_conf_{ten_id}')
+    if not debt_info:
+        conf.button(text='✅ Подтвердить получение чека', callback_data=f'ch_conf_{ten_id}')
+    else:
+        conf.button(text='✅ Подтвердить  уплату долга', callback_data=f'dch_{ten_id}_{debt_info}')
     return conf.as_markup()
 
 
 def viewing_tenant(ten_id):
     view_ten = InlineKeyboardBuilder()
     view_ten.button(text='📂 Посмотреть историю (оплачено)', callback_data=f'hist_true_{ten_id}')
+    view_ten.button(text='За определенный период', callback_data=f'hist_{ten_id}')
     view_ten.button(text='📃 Не оплачено', callback_data=f'hist_false_{ten_id}')
     view_ten.button(text='❌ Удалить квартиранта', callback_data=f'del_{ten_id}')
     view_ten.adjust(1)
@@ -67,5 +71,7 @@ def view_history_checks(doc_key, pay_status=False):
     view_t.button(text='🧾 Посмотреть платежку', callback_data=f'p_{doc_key}')
     if pay_status:
         view_t.button(text='📃 Посмотреть чек оплаты', callback_data=f'ch_{doc_key}')
+    if not pay_status:
+        view_t.button(text='Отправить платежку еще раз', callback_data=f'retry_{doc_key}')
     view_t.adjust(1)
     return view_t.as_markup()

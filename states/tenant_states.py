@@ -15,3 +15,6 @@ class Tenant(StatesGroup):
 
     send_first_check = State()
     send_second_check = State()
+
+    debt_send_first_check = State()
+    debt_send_second_check = State()
