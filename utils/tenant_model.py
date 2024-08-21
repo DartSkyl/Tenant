@@ -20,13 +20,13 @@ class Tenant:
         #     'check': None
         # }
         self.readings_dict = {
-            'reporting_date': '21.08.2024',
-            'cold': 10,
-            'hot': 11,
-            'electricity_day': 12,
-            'electricity_night': 13,
-            'heating': 14,
-            'payment_slip': 'AgACAgIAAxkBAAIzNma9oM3gy5AYgr_-hAkVGFsC0hECAAJc2TEbTT7xScWZda0q_-J4AQADAgADeQADNQQ^^^^^photo$$$AgACAgIAAxkBAAIzOGa9oNQJi3suJiOxwaBexB5-0nPnAAJd2TEbTT7xSdCgETQbdebDAQADAgADeQADNQQ^^^^^photo',
+            'reporting_date': None,
+            'cold': None,
+            'hot': None,
+            'electricity_day': None,
+            'electricity_night': None,
+            'heating': None,
+            'payment_slip': None,
             'check': None
         }
         self.debt_check = ''
