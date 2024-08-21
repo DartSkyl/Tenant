@@ -9,16 +9,6 @@ class Tenant:
 
         # Словарь показаний используется для сохранения истории в базу. После оплаты производиться сброс
 
-        # self.readings_dict = {
-        #     'reporting_date': None,
-        #     'cold': None,
-        #     'hot': None,
-        #     'electricity_day': None,
-        #     'electricity_night': None,
-        #     'heating': None,
-        #     'payment_slip': None,
-        #     'check': None
-        # }
         self.readings_dict = {
             'reporting_date': None,
             'cold': None,
