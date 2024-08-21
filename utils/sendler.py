@@ -89,7 +89,7 @@ class Sendler:
         self._scheduler = AsyncIOScheduler(gconfig={'apscheduler.timezone': 'Europe/Moscow'})
         self._scheduler.start()
         self._send_date = 21  # Число, когда начинается напоминание о снятии показаний счетчиков
-        self._send_time = 9  # Время дня во сколько начинать рассылку
+        self._send_time = 14  # Время дня во сколько начинать рассылку
         self._interval = 2  # Интервал в часах для повторной отправки напоминая
 
     def get_settings_info(self):
@@ -108,7 +108,7 @@ class Sendler:
             trigger='cron',
             day=self._send_date,
             hour=self._send_time,
-            minute=38,
+            minute=0,
             id='send',
             max_instances=1,
             replace_existing=True
