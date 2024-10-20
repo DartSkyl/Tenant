@@ -1,5 +1,5 @@
 import datetime
-from loader import bot, tenant_list, bot_base
+from loader import bot, tenant_list, bot_base, messages
 from config.configurations import ADMIN_ID
 from utils.tenant_router import tenant_router
 from utils.tenant_model import Tenant
@@ -182,7 +182,9 @@ async def send_readings_func(callback: CallbackQuery, state: FSMContext):
                     f'<b>{datetime.datetime.now().strftime("%H:%M %d.%m.%Y")}</b>')
 
         for admin in ADMIN_ID:
-            await bot.send_message(chat_id=admin, text=msg_text, reply_markup=readings_come(readings['tenant_id']))
+            m = await bot.send_message(chat_id=admin, text=msg_text, reply_markup=readings_come(readings['tenant_id']))
+            messages['readings'].append(m)
+
         await callback.message.answer('Показания отправлены, ожидайте подтверждение')
         await state.clear()
 

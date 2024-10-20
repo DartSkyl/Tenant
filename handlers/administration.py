@@ -1,6 +1,6 @@
 import datetime
 from sqlite3 import IntegrityError
-from loader import bot, tenant_list, bot_base
+from loader import bot, tenant_list, bot_base, messages
 from utils.admin_router import admin_router
 from utils.tenant_model import Tenant
 from utils.sendler import SendlerInterface
@@ -9,7 +9,7 @@ from keyboards import (main_menu, edit_tenant_data, settings, send_payment_slip,
 from states import AdminStates
 from config.configurations import ADMIN_ID
 
-from aiogram.types import Message, FSInputFile, CallbackQuery
+from aiogram.types import Message, FSInputFile, CallbackQuery, ReplyKeyboardRemove
 from aiogram import F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
@@ -36,6 +36,14 @@ async def catch_readings(callback: CallbackQuery, state: FSMContext):
         if ten.get_tenant_id() == ten_id:
             ten_info += ten.get_info_string()
             break
+
+    for m in messages['readings']:
+        try:
+            await m.delete_reply_markup()
+        except Exception as e:
+            print(e)
+    messages['readings'] = []
+
     msg_text = f'Квартирант {ten_info} ожидает платежку\n\n<b>{datetime.datetime.now().strftime("%H:%M %d.%m.%Y")}</b>'
 
     for admin in ADMIN_ID:

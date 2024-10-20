@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+import logging
 from loader import tenant_list, bot, bot_base
 from keyboards import readings_send_init
 
@@ -23,13 +24,12 @@ async def send_reminder(interval):
     что бы после того, как внутренний for пройдет по всем квартирантам встать на интервал рассылки ип потом все
     повторить. Останавливать while будем с помощью подсчета отправленных показаний"""
 
+    print('Start new reporting', datetime.datetime.now())
+
     for ten in tenant_list:
         ten_id = ten.get_tenant_id()
-        print(ten, ten_id)
-        print(ten.readings_dict)
         # Проверим, оплатил ли предыдущий месяц. Если показания не сбросились, значит не оплачено
         if ten.readings_dict['cold']:
-            print(ten.readings_dict)
             await bot_base.add_dept(
                 ten_id=ten_id,
                 data=ten.readings_dict['reporting_date'],
@@ -55,13 +55,15 @@ async def send_reminder(interval):
             if not ten.check_readings_status():  # Проверяем статус показаний
                 ten_id = ten.get_tenant_id()
                 try:
+                    print('Try send to:', ten_id, end='... ')
                     await bot.send_message(
                         chat_id=ten_id,
                         text='Пора снять показания!',
                         reply_markup=readings_send_init(ten_id)
                     )
-                except TelegramForbiddenError:
-                    print(ten_id)
+                    print('Success!')
+                except TelegramForbiddenError as e:
+                    print('Error:', e)
                     pass
             else:
                 tenant_send.append(ten)
@@ -88,8 +90,8 @@ class Sendler:
     def __init__(self):
         self._scheduler = AsyncIOScheduler(gconfig={'apscheduler.timezone': 'Europe/Moscow'})
         self._scheduler.start()
-        self._send_date = 21  # Число, когда начинается напоминание о снятии показаний счетчиков
-        self._send_time = 14  # Время дня во сколько начинать рассылку
+        self._send_date = 20  # Число, когда начинается напоминание о снятии показаний счетчиков
+        self._send_time = 15  # Время дня во сколько начинать рассылку
         self._interval = 2  # Интервал в часах для повторной отправки напоминая
 
     def get_settings_info(self):

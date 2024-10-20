@@ -24,8 +24,8 @@ class Tenant:
     def __str__(self):
         tenant_info = (f'Address: {self._address}\n'
                        f'Name: {self._name}\n'
-                       f'Readings: {self._readings}'
-                       f'Username: {self._user_id}\n\n')
+                       f'Readings: {self._readings}\n'
+                       f'User ID: {self._user_id}\n\n')
         return tenant_info
 
     def get_tenant_id(self):
