@@ -64,6 +64,7 @@ async def send_reminder(interval):
                     print('Success!')
                 except TelegramForbiddenError as e:
                     print('Error:', e)
+                    tenant_send.append(ten)
                     pass
             else:
                 tenant_send.append(ten)
