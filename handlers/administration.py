@@ -37,12 +37,12 @@ async def catch_readings(callback: CallbackQuery, state: FSMContext):
             ten_info += ten.get_info_string()
             break
 
-    for m in messages['readings']:
+    for m in messages[ten_id]['readings']:
         try:
             await m.delete_reply_markup()
         except Exception as e:
             print(e)
-    messages['readings'] = []
+    messages[ten_id]['readings'] = []
 
     msg_text = f'Квартирант {ten_info} ожидает платежку\n\n<b>{datetime.datetime.now().strftime("%H:%M %d.%m.%Y")}</b>'
 
@@ -176,6 +176,12 @@ async def check_confirming(callback: CallbackQuery, state: FSMContext):
 
     msg_text = (f'Квартирант {ten_info} оплатил коммуналку!\n\n'
                 f'<b>{datetime.datetime.now().strftime("%H:%M %d.%m.%Y")}</b>')
+    for m in messages[ten_id]['checks']:
+        try:
+            await m.delete_reply_markup()
+        except Exception as e:
+            print(e)
+    messages[ten_id]['checks'] = []
 
     for admin in ADMIN_ID:
         await bot.send_message(chat_id=admin, text=msg_text)

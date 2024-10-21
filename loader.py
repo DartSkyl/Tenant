@@ -14,9 +14,7 @@ bot_base = BotBase()
 tenant_list = list()
 
 # Словарь с отправляемыми администраторам сообщениями
-messages = {
-    'readings': []
-}
+messages = dict()
 
 
 async def base_load():
@@ -33,3 +31,4 @@ async def load_tenants():
             name=elem[1],
             user_id=elem[2]
         ))
+        messages[elem[2]] = {'readings': [], 'checks': []}

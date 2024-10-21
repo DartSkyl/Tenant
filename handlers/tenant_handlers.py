@@ -183,7 +183,8 @@ async def send_readings_func(callback: CallbackQuery, state: FSMContext):
 
         for admin in ADMIN_ID:
             m = await bot.send_message(chat_id=admin, text=msg_text, reply_markup=readings_come(readings['tenant_id']))
-            messages['readings'].append(m)
+            # Сохраняем сообщения, что бы потом удалить с них кнопку "подтвердить" когда один из админов ее нажмет
+            messages[int(readings['tenant_id'])]['readings'].append(m)
 
         await callback.message.answer('Показания отправлены, ожидайте подтверждение')
         await state.clear()
@@ -264,21 +265,25 @@ async def send_check_to_admin(callback: CallbackQuery, state: FSMContext):
 
     if payment_slip_info['second_check'][1] == 'photo':
         for admin in ADMIN_ID:
-            await bot.send_photo(
+            m = await bot.send_photo(
                 chat_id=admin,
                 photo=payment_slip_info['second_check'][0],
                 caption=msg_text,
                 reply_markup=confirm_check(callback.from_user.id)
             )
+            # Сохраняем сообщения, что бы потом удалить с них кнопку "подтвердить" когда один из админов ее нажмет
+            messages[callback.from_user.id]['checks'].append(m)
 
     elif payment_slip_info['second_check'][1] == 'document':
         for admin in ADMIN_ID:
-            await bot.send_document(
+            m = await bot.send_document(
                 chat_id=admin,
                 document=payment_slip_info['second_check'][0],
                 caption=msg_text,
                 reply_markup=confirm_check(callback.from_user.id)
             )
+            # Сохраняем сообщения, что бы потом удалить с них кнопку "подтвердить" когда один из админов ее нажмет
+            messages[callback.from_user.id]['checks'].append(m)
 
     await state.clear()
     await callback.message.answer('Чек отправлен, ожидайте подтверждения')
