@@ -1,5 +1,5 @@
 from typing import List
-from config.configurations import ADMIN_ID
+from configurations import ADMIN_ID
 from aiogram import Router
 from aiogram.types import Message
 from aiogram.filters import BaseFilter

@@ -1,6 +1,6 @@
 import datetime
 from loader import bot, tenant_list, bot_base, messages
-from config.configurations import ADMIN_ID
+from configurations import ADMIN_ID
 from utils.tenant_router import tenant_router
 from utils.tenant_model import Tenant
 from keyboards import (registration_application, readings_editor, need_heating,

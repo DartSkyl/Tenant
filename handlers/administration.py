@@ -7,9 +7,9 @@ from utils.sendler import SendlerInterface
 from keyboards import (main_menu, edit_tenant_data, settings, send_payment_slip, send_debt_check,
                        send_ps, send_check, viewing_tenant, ten_rem_conf, view_history_checks)
 from states import AdminStates
-from config.configurations import ADMIN_ID
+from configurations import ADMIN_ID
 
-from aiogram.types import Message, FSInputFile, CallbackQuery, ReplyKeyboardRemove
+from aiogram.types import Message, CallbackQuery
 from aiogram import F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
@@ -20,6 +20,13 @@ async def start_function(msg: Message, state: FSMContext):
     """Функция старта и главное меню"""
     await state.clear()
     await msg.answer(text='Главное меню:', reply_markup=main_menu)
+
+
+# @admin_router.message(Command('test'))
+# async def test(msg: Message):
+#     from utils.sendler import send_reminder
+#     await send_reminder(1)
+#     await msg.answer('Test')
 
 
 # ========== Основной функционал ==========
@@ -530,6 +537,8 @@ async def edit_tenant_data_func(callback: CallbackQuery, state: FSMContext):
             await bot.send_message(chat_id=tenant_data['user_id'],
                                    text='Вы были добавлены в бота-квартиранта!')
             await callback.message.answer('Квартирант зарегистрирован!')
+
+            messages[tenant_data['user_id']] = {'readings': [], 'checks': []}
 
             for admin in ADMIN_ID:
                 if admin != callback.from_user.id:

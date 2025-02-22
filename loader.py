@@ -1,6 +1,6 @@
-from config.configurations import BOT_TOKEN
+from configurations import BOT_TOKEN
 from utils.tenant_model import Tenant
-from database.base import BotBase
+from base import BotBase
 
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
